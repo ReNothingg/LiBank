@@ -1,0 +1,87 @@
+{
+  "users": {
+    "1001": {
+      "id": "1001",
+      "name": "Анна Петрова",
+      "balance": 35585.0,
+      "currency": "RUB",
+      "transactions": [
+        {
+          "id": "feca5d94cf49",
+          "timestamp": "2025-09-10T20:43:04.362664+00:00",
+          "type": "topup",
+          "amount": 21312.0,
+          "signed_amount": 21312.0,
+          "currency": "RUB",
+          "description": "Пополнение (тест)",
+          "counterparty": null,
+          "balance_after": 35585.0
+        },
+        {
+          "id": "88c9dc76bfea",
+          "timestamp": "2025-09-10T20:43:01.681052+00:00",
+          "type": "topup",
+          "amount": 123.0,
+          "signed_amount": 123.0,
+          "currency": "RUB",
+          "description": "Пополнение (тест)",
+          "counterparty": null,
+          "balance_after": 14273.0
+        },
+        {
+          "id": "8f1b9940ee62",
+          "timestamp": "2025-09-10T20:42:46.759503+00:00",
+          "type": "out",
+          "amount": 350.5,
+          "signed_amount": -350.5,
+          "currency": "RUB",
+          "description": "Кофе",
+          "counterparty": "Coffee Bar",
+          "balance_after": 14150.0
+        },
+        {
+          "id": "3a4e0e02b975",
+          "timestamp": "2025-09-10T20:42:46.759476+00:00",
+          "type": "topup",
+          "amount": 2000.0,
+          "signed_amount": 2000.0,
+          "currency": "RUB",
+          "description": "Пополнение",
+          "counterparty": null,
+          "balance_after": 14500.5
+        }
+      ]
+    },
+    "1002": {
+      "id": "1002",
+      "name": "Иван Иванов",
+      "balance": 8400.0,
+      "currency": "RUB",
+      "transactions": [
+        {
+          "id": "56d151c0478f",
+          "timestamp": "2025-09-10T20:43:17.221138+00:00",
+          "type": "topup",
+          "amount": 500.0,
+          "signed_amount": 500.0,
+          "currency": "RUB",
+          "description": "Пополнение (тест)",
+          "counterparty": null,
+          "balance_after": 8400.0
+        },
+        {
+          "id": "dd18d053cb78",
+          "timestamp": "2025-09-10T20:42:46.759514+00:00",
+          "type": "topup",
+          "amount": 1500.0,
+          "signed_amount": 1500.0,
+          "currency": "RUB",
+          "description": "Пополнение",
+          "counterparty": null,
+          "balance_after": 7900.0
+        }
+      ]
+    }
+  },
+  "invoices": {}
+}
