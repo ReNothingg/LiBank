@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% set page = "account" %}
+{% block extra_libs %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+{% endblock %}
+{% block content %}
+<div class="screen">
+    <header class="topbar">
+        <div class="topbar-row">
+            <div class="hello">
+                Привет, <span id="username">...</span>
+            </div>
+            <button id="logoutBtn" class="icon-btn" title="Выход" aria-label="Выход">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <path d="M10 17l5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <path d="M15 12H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M21 21V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+            </button>
+        </div>
+        <div class="balance">
+            <div class="balance-label">Баланс</div>
+            <div id="balance" class="balance-value">—</div>
+        </div>
+    </header>
+
+    <section class="actions">
+        <button id="scanBtn" class="btn secondary">
+            <span class="emoji">📷</span> Сканировать QR‑код
+        </button>
+        <button id="createBtn" class="btn primary">
+            <span class="emoji">🧾</span> Создать QR‑код
+        </button>
+    </section>
+
+    <section class="history">
+        <div class="history-head">
+            <h2>История операций</h2>
+            <div class="filters" role="tablist">
+                <button class="chip active" data-filter="all">Все</button>
+                <button class="chip" data-filter="out">Списания</button>
+                <button class="chip" data-filter="in">Поступления</button>
+            </div>
+        </div>
+        <div id="txList" class="tx-list"></div>
+    </section>
+</div>
+
+<div id="scanModal" class="modal">
+    <div class="modal__sheet">
+        <div class="modal__header">
+            <div class="title">Оплата по QR</div>
+            <button class="icon-btn" data-close-modal>&#10005;</button>
+        </div>
+        <div class="modal__content">
+            <div id="qrReader" class="qr-reader"></div>
+            <div class="muted small mt-8">Наведите камеру на QR‑код или вставьте ссылку вручную ниже.</div>
+            <div class="or">или</div>
+            <div class="form compact">
+                <input type="text" id="manualPaylink"
+                    placeholder="Вставьте ссылку счёта (http://localhost:5000/paylink?...)" />
+                <button id="manualPreviewBtn" class="btn secondary">Проверить</button>
+            </div>
+            <div id="invoicePreview" class="invoice-preview hidden"></div>
+        </div>
+        <div class="modal__footer">
+            <button class="btn ghost" data-close-modal>Отмена</button>
+            <button id="confirmPayBtn" class="btn primary" disabled>Оплатить</button>
+        </div>
+    </div>
+</div>
+
+<div id="createModal" class="modal">
+    <div class="modal__sheet">
+        <div class="modal__header">
+            <div class="title">Создать QR‑счёт</div>
+            <button class="icon-btn" data-close-modal>&#10005;</button>
+        </div>
+        <div class="modal__content">
+            <form id="createForm" class="form">
+                <label class="field">
+                    <span>Сумма</span>
+                    <input type="text" name="amount" placeholder="Например, 350" inputmode="decimal" required />
+                </label>
+                <label class="field">
+                    <span>Описание</span>
+                    <input type="text" name="description" placeholder="За кофе" maxlength="200" />
+                </label>
+                <button type="submit" class="btn primary full">Сгенерировать</button>
+            </form>
+
+            <div id="qrResult" class="qr-result hidden">
+                <img id="qrImage" alt="QR" />
+                <div class="muted small">Ссылка на оплату:</div>
+                <div class="copy-row">
+                    <input id="qrLink" class="copy-input" readonly />
+                    <button id="copyLinkBtn" class="btn secondary">Копировать</button>
+                </div>
+                <button id="shareBtn" class="btn ghost full">Поделиться</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

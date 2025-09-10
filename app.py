@@ -1,416 +1,361 @@
 import os
 import io
-import json
+import hmac
+import time
 import base64
-import secrets
-from datetime import datetime, timezone
-from functools import wraps
+import hashlib
+import urllib.parse
+from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 
-from flask import Flask, jsonify, request, session, send_from_directory, abort, redirect, url_for
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+import bcrypt
 import qrcode
-from qrcode.constants import ERROR_CORRECT_Q
 
-# Все файлы в корне
-app = Flask(__name__, static_folder=".", static_url_path="", template_folder=".")
-app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret-change-me")
-app.config["JSON_SORT_KEYS"] = False
+# ---------------------------
+# Конфигурация приложения
+# ---------------------------
+app = Flask(__name__, static_folder='static', template_folder='templates')
+app.config.update(
+    SECRET_KEY='dev-secret-change-me',
+    SQLALCHEMY_DATABASE_URI='sqlite:///bank.db',
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_HTTPONLY=True,
+)
+app.config['PAYLINK_SECRET'] = os.environ.get('PAYLINK_SECRET', 'dev-paylink-secret')
 
-DB_FILE = "db.json"
-CURRENCY = "RUB"
+db = SQLAlchemy(app)
 
-def now_iso():
-    return datetime.now(timezone.utc).isoformat()
+# ---------------------------
+# Модели БД
+# ---------------------------
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(128), nullable=False)
+    balance_cents = db.Column(db.Integer, nullable=False, default=100000)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-def round2(x: float) -> float:
-    return round(float(x) + 1e-12, 2)
 
-def db_exists() -> bool:
-    return os.path.exists(DB_FILE)
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    amount_cents = db.Column(db.Integer, nullable=False)  # > 0
+    description = db.Column(db.String(255), default='', nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-def load_db():
-    if not db_exists():
-        return None
-    with open(DB_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
-def save_db(db):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(db, f, ensure_ascii=False, indent=2)
+# ---------------------------
+# Вспомогательные функции
+# ---------------------------
+def init_db():
+    with app.app_context():
+        db.create_all()
 
-def new_user(db: dict, username: str, password: str, name: str | None = None, balance: float = 0.0):
-    username_raw = (username or "").strip()
-    username_l = username_raw.lower()
-    if not username_l or not password:
-        raise ValueError("Пустой логин или пароль")
-    if " " in username_raw:
-        raise ValueError("Имя пользователя не должно содержать пробелы")
-    db.setdefault("usernames", {})
-    db.setdefault("users", {})
-    if username_l in db["usernames"]:
-        raise ValueError("Пользователь с таким именем уже существует")
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-    uid = "U" + secrets.token_hex(4).upper()
-    user = {
-        "id": uid,
-        "username": username_raw,
-        "name": name or username_raw,
-        "password_hash": generate_password_hash(password, method="pbkdf2:sha256", salt_length=16),
-        "balance": round2(balance),
-        "currency": CURRENCY,
-        "transactions": []
-    }
-    db["users"][uid] = user
-    db["usernames"][username_l] = uid
-    return user
+def check_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
-def get_user_by_username(db: dict, username: str):
-    if not db:
-        return None
-    username_l = (username or "").strip().lower()
-    uid = db.get("usernames", {}).get(username_l)
-    if not uid:
-        return None
-    return db["users"].get(uid)
+def cents_to_rub_display(cents: int) -> str:
+    rub = Decimal(cents) / Decimal(100)
+    s = f"{rub:,.2f}".replace(",", "X").replace(".", ",").replace("X", " ")
+    return f"{s} ₽"
 
-def add_tx(user: dict, tx_type: str, signed_amount: float, description: str, counterparty=None):
-    user["balance"] = round2(user.get("balance", 0.0) + signed_amount)
-    tx = {
-        "id": secrets.token_hex(6),
-        "timestamp": now_iso(),
-        "type": tx_type,  # in | out | payment | topup | transfer
-        "amount": round2(abs(signed_amount)),
-        "signed_amount": round2(signed_amount),
-        "currency": user.get("currency", CURRENCY),
-        "description": description,
-        "counterparty": counterparty,
-        "balance_after": user["balance"],
-    }
-    user.setdefault("transactions", [])
-    user["transactions"].insert(0, tx)
-    return tx
-
-def require_db(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if not db_exists():
-            return jsonify({"ok": False, "error": "База не инициализирована"}), 400
-        return fn(*args, **kwargs)
-    return wrapper
-
-def login_required(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if not db_exists():
-            return jsonify({"ok": False, "error": "База не инициализирована"}), 400
-        db = load_db()
-        uid = session.get("user_id")
-        if not uid or uid not in db["users"]:
-            return jsonify({"ok": False, "error": "unauthorized"}), 401
-        return fn(*args, **kwargs)
-    return wrapper
-
-# Маршруты страниц
-@app.get("/")
-def index():
-    return send_from_directory(".", "login.html")
-
-@app.get("/app")
-def app_page():
-    if not session.get("user_id"):
-        return redirect(url_for("index"))
-    return send_from_directory(".", "app.html")
-
-# Статические ресурсы (если потребуются)
-@app.route("/<path:path>")
-def static_proxy(path):
-    if os.path.exists(path):
-        return send_from_directory(".", path)
-    abort(404)
-
-# API: статус/инициализация/аутентификация
-@app.get("/api/status")
-def api_status():
-    if not db_exists():
-        return jsonify({"ok": True, "db_exists": False, "user_count": 0})
-    db = load_db()
-    return jsonify({"ok": True, "db_exists": True, "user_count": len(db.get("users", {}))})
-
-@app.post("/api/setup_db")
-def api_setup_db():
-    if db_exists():
-        return jsonify({"ok": False, "error": "База уже создана"}), 409
-    data = request.get_json(silent=True) or {}
-    username = str(data.get("username", "")).strip()
-    password = str(data.get("password", "")).strip()
-    name = str(data.get("name", "")).strip() or username
-    if not username or not password:
-        return jsonify({"ok": False, "error": "Укажите имя пользователя и пароль"}), 400
-    db = {"users": {}, "usernames": {}, "invoices": {}}
+def parse_amount_to_cents(amount_str: str) -> int:
     try:
-        admin = new_user(db, username=username, password=password, name=name, balance=10000.0)
-    except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-    # Добавим 1-2 стартовые транзакции администратору
-    add_tx(admin, "topup", +2000.00, "Пополнение (старт)", None)
-    add_tx(admin, "out", -350.50, "Кофе", "Coffee Bar")
-    save_db(db)
-    return jsonify({"ok": True})
+        normalized = amount_str.strip().replace(" ", "").replace(",", ".")
+        d = Decimal(normalized)
+        if d <= 0:
+            return -1
+        cents = int((d * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        return cents
+    except Exception:
+        return -1
 
-@app.post("/api/login")
-@require_db
-def api_login():
-    db = load_db()
-    data = request.get_json(silent=True) or {}
-    username = str(data.get("username", "")).strip()
-    password = str(data.get("password", "")).strip()
-    user = get_user_by_username(db, username)
-    if not user or not check_password_hash(user["password_hash"], password):
-        return jsonify({"ok": False, "error": "Неверное имя пользователя или пароль"}), 401
-    session["user_id"] = user["id"]
-    return jsonify({"ok": True})
+def hmac_signature(recipient_id: int, amount_cents: int, desc: str, ts: int) -> str:
+    msg = f"{recipient_id}|{amount_cents}|{desc}|{ts}".encode('utf-8')
+    key = app.config['PAYLINK_SECRET'].encode('utf-8')
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
 
-@app.post("/api/logout")
-def api_logout():
-    session.pop("user_id", None)
-    return jsonify({"ok": True})
-
-# API: профиль и базовые данные
-@app.get("/api/me")
-@login_required
-def api_me():
-    db = load_db()
-    uid = session["user_id"]
-    user = db["users"][uid]
-    return jsonify({
-        "ok": True,
-        "user": {
-            "id": user["id"],
-            "username": user["username"],
-            "name": user["name"],
-            "balance": user["balance"],
-            "currency": user.get("currency", CURRENCY),
-        }
+def generate_paylink(recipient_id: int, amount_cents: int, desc: str) -> str:
+    ts = int(time.time())
+    sig = hmac_signature(recipient_id, amount_cents, desc, ts)
+    params = urllib.parse.urlencode({
+        'rid': recipient_id,
+        'amt': amount_cents,
+        'desc': desc,
+        'ts': ts,
+        'sig': sig
     })
+    return f"http://localhost:5000/paylink?{params}"
 
-@app.post("/api/change_profile")
-@login_required
-def api_change_profile():
-    db = load_db()
-    uid = session["user_id"]
-    user = db["users"][uid]
-    data = request.get_json(silent=True) or {}
-    name = str(data.get("name", "")).strip()
-    if not name:
-        return jsonify({"ok": False, "error": "Имя не может быть пустым"}), 400
-    user["name"] = name
-    save_db(db)
-    return jsonify({"ok": True})
+def parse_paylink(url_or_text: str):
+    try:
+        parsed = urllib.parse.urlparse(url_or_text)
+        if parsed.scheme not in ('http', 'https') or parsed.netloc not in ('localhost:5000', '127.0.0.1:5000'):
+            return None, "Некорректный домен в ссылке"
+        if parsed.path != '/paylink':
+            return None, "Некорректный путь в ссылке"
+        q = urllib.parse.parse_qs(parsed.query)
+        rid = q.get('rid', [None])[0]
+        amt = q.get('amt', [None])[0]
+        desc = q.get('desc', [''])[0]
+        ts = q.get('ts', [None])[0]
+        sig = q.get('sig', [None])[0]
+        if not all([rid, amt, ts, sig]):
+            return None, "Отсутствуют необходимые параметры"
+        rid = int(rid)
+        amt = int(amt)
+        ts = int(ts)
+        expected_sig = hmac_signature(rid, amt, desc, ts)
+        if not hmac.compare_digest(sig, expected_sig):
+            return None, "Подпись ссылки не совпала"
+        return {'recipient_id': rid, 'amount_cents': amt, 'description': desc, 'timestamp': ts}, None
+    except Exception:
+        return None, "Не удалось разобрать ссылку"
 
-@app.post("/api/change_password")
-@login_required
-def api_change_password():
-    db = load_db()
-    uid = session["user_id"]
-    user = db["users"][uid]
-    data = request.get_json(silent=True) or {}
-    old = str(data.get("old_password", "")).strip()
-    new = str(data.get("new_password", "")).strip()
-    if not check_password_hash(user["password_hash"], old):
-        return jsonify({"ok": False, "error": "Старый пароль неверен"}), 400
-    if len(new) < 4:
-        return jsonify({"ok": False, "error": "Новый пароль слишком короткий"}), 400
-    user["password_hash"] = generate_password_hash(new, method="pbkdf2:sha256", salt_length=16)
-    save_db(db)
-    return jsonify({"ok": True})
-
-# API: транзакции/баланс
-@app.get("/api/transactions")
-@login_required
-def api_transactions():
-    db = load_db()
-    uid = session["user_id"]
-    user = db["users"][uid]
-    txs = user.get("transactions", [])
-    return jsonify({"ok": True, "transactions": txs})
-
-@app.post("/api/topup")
-@login_required
-def api_topup():
-    db = load_db()
-    uid = session["user_id"]
-    user = db["users"][uid]
-    data = request.get_json(silent=True) or {}
-    amount = float(data.get("amount", 0))
-    if amount <= 0:
-        return jsonify({"ok": False, "error": "Некорректная сумма"}), 400
-    add_tx(user, "topup", +round2(amount), "Пополнение (тест)", None)
-    save_db(db)
-    return jsonify({"ok": True, "balance": user["balance"]})
-
-@app.post("/api/transfer")
-@login_required
-def api_transfer():
-    db = load_db()
-    uid = session["user_id"]
-    from_user = db["users"][uid]
-    data = request.get_json(silent=True) or {}
-    to_username = str(data.get("to_username", "")).strip()
-    amount = float(data.get("amount", 0))
-    description = str(data.get("description", "")).strip()[:140]
-    if amount <= 0:
-        return jsonify({"ok": False, "error": "Некорректная сумма"}), 400
-    to_user = get_user_by_username(db, to_username)
-    if not to_user:
-        return jsonify({"ok": False, "error": "Получатель не найден"}), 404
-    if to_user["id"] == from_user["id"]:
-        return jsonify({"ok": False, "error": "Нельзя переводить самому себе"}), 400
-    if from_user["balance"] < amount:
-        return jsonify({"ok": False, "error": "Недостаточно средств"}), 400
-    add_tx(from_user, "transfer", -amount, description or f"Перевод {to_user['username']}", counterparty=to_user["name"])
-    add_tx(to_user, "in", +amount, description or f"Перевод от {from_user['username']}", counterparty=from_user["name"])
-    save_db(db)
-    return jsonify({"ok": True, "balances": {
-        "from": {"id": from_user["id"], "balance": from_user["balance"]},
-        "to": {"id": to_user["id"], "balance": to_user["balance"]},
-    }})
-
-# API: счета и QR
-@app.post("/api/create_invoice")
-@login_required
-def api_create_invoice():
-    db = load_db()
-    uid = session["user_id"]
-    user = db["users"][uid]
-    data = request.get_json(silent=True) or {}
-    amount = float(data.get("amount", 0))
-    description = str(data.get("description", "")).strip()[:140]
-    if amount <= 0:
-        return jsonify({"ok": False, "error": "Некорректная сумма"}), 400
-
-    invoice_id = "INV-" + secrets.token_hex(5).upper()
-    invoice = {
-        "id": invoice_id,
-        "to_user": uid,  # получатель
-        "amount": round2(amount),
-        "currency": user.get("currency", CURRENCY),
-        "description": description,
-        "created_at": now_iso(),
-        "status": "unpaid",
-        "paid_at": None,
-        "paid_by": None,
-    }
-    db["invoices"][invoice_id] = invoice
-    save_db(db)
-
-    # URI для QR
-    qr_text = f"BANKPAY://invoice?i={invoice_id}"
-    # Генерация PNG base64
-    qr = qrcode.QRCode(version=1, error_correction=ERROR_CORRECT_Q, box_size=8, border=1)
-    qr.add_data(qr_text)
+def generate_qr_png_base64(data: str) -> str:
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2
+    )
+    qr.add_data(data)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    data_url = f"data:image/png;base64,{b64}"
+    img.save(buf, format='PNG')
+    b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    return f"data:image/png;base64,{b64}"
 
-    return jsonify({"ok": True, "invoice": invoice, "qr_text": qr_text, "qr_png": data_url})
+def login_required_json(fn):
+    from functools import wraps
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'ok': False, 'error': 'Требуется авторизация'}), 401
+        return fn(*args, **kwargs)
+    return wrapper
 
-def parse_invoice_id_from_text(qr_text: str):
-    t = (qr_text or "").strip()
-    if not t:
+def current_user():
+    if 'user_id' not in session:
         return None
-    # Поддержка BANKPAY://invoice?i=..., а также http(s)://...i=... и прямого INV-...
-    if t.startswith("BANKPAY://invoice?"):
-        parts = t.split("i=", 1)
-        if len(parts) == 2:
-            return parts[1].split("&", 1)[0].strip()
-    if t.startswith("http://") or t.startswith("https://"):
-        if "i=" in t:
-            return t.split("i=", 1)[1].split("&", 1)[0].strip()
-    if t.startswith("INV-"):
-        return t
-    return None
+    return User.query.get(session['user_id'])
 
-@app.post("/api/pay_invoice")
-@login_required
-def api_pay_invoice():
-    db = load_db()
-    payer_id = session["user_id"]
-    payer = db["users"][payer_id]
-    data = request.get_json(silent=True) or {}
-    qr_text = str(data.get("qr_text", "")).strip()
-    invoice_id = parse_invoice_id_from_text(qr_text)
-    if not invoice_id or invoice_id not in db["invoices"]:
-        return jsonify({"ok": False, "error": "Счет не найден"}), 404
-    invoice = db["invoices"][invoice_id]
-    if invoice["status"] != "unpaid":
-        return jsonify({"ok": False, "error": "Счет уже оплачен или недоступен"}), 400
-    receiver_id = invoice["to_user"]
-    if receiver_id not in db["users"]:
-        return jsonify({"ok": False, "error": "Получатель не найден"}), 404
-    if payer_id == receiver_id:
-        return jsonify({"ok": False, "error": "Нельзя оплатить собственный счет"}), 400
-    amount = invoice["amount"]
-    if payer["balance"] < amount:
-        return jsonify({"ok": False, "error": "Недостаточно средств"}), 400
 
-    receiver = db["users"][receiver_id]
-    add_tx(payer, "payment", -amount,
-           f"Оплата счета {invoice_id}" + (f" — {invoice['description']}" if invoice["description"] else ""),
-           counterparty=receiver["name"])
-    add_tx(receiver, "in", +amount,
-           f"Поступление по счету {invoice_id}" + (f" — {invoice['description']}" if invoice["description"] else ""),
-           counterparty=payer["name"])
+# ---------------------------
+# Маршруты фронтенда
+# ---------------------------
+@app.route('/')
+def index():
+    if 'user_id' in session:
+        return redirect(url_for('account'))
+    return render_template('index.html')
 
-    invoice["status"] = "paid"
-    invoice["paid_at"] = now_iso()
-    invoice["paid_by"] = payer_id
-    save_db(db)
-    return jsonify({"ok": True, "invoice": invoice})
+@app.route('/register')
+def register_page():
+    if 'user_id' in session:
+        return redirect(url_for('account'))
+    return render_template('register.html')
 
-@app.get("/api/invoice/<invoice_id>")
-@login_required
-def api_invoice(invoice_id):
-    db = load_db()
-    inv = db["invoices"].get(invoice_id)
-    if not inv:
-        return jsonify({"ok": False, "error": "Счет не найден"}), 404
-    return jsonify({"ok": True, "invoice": inv})
+@app.route('/account')
+def account():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    return render_template('account.html')
 
-@app.get("/api/my_invoices")
-@login_required
-def api_my_invoices():
-    db = load_db()
-    uid = session["user_id"]
-    all_inv = db.get("invoices", {})
-    mine = [v for v in all_inv.values() if v.get("to_user") == uid]
-    mine.sort(key=lambda x: x["created_at"], reverse=True)
-    return jsonify({"ok": True, "invoices": mine})
+@app.route('/paylink')
+def paylink_page():
+    return render_template('paylink.html')
 
-@app.post("/api/create_demo_user")
-@login_required
-def api_create_demo_user():
-    db = load_db()
-    # подберем имя: demo, demo2, demo3 ...
-    base = "demo"
-    idx = 0
-    while True:
-        uname = base if idx == 0 else f"{base}{idx+1}"
-        if not get_user_by_username(db, uname):
-            break
-        idx += 1
-        if idx > 20:
-            return jsonify({"ok": False, "error": "Невозможно создать демо-пользователя"}), 400
-    password = uname  # для удобства
-    try:
-        user = new_user(db, uname, password, name=uname.capitalize(), balance=5000.0)
-    except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-    add_tx(user, "topup", +1000.00, "Пополнение (демо)", None)
-    save_db(db)
-    return jsonify({"ok": True, "user": {"username": uname, "password": password}})
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+# ---------------------------
+# API
+# ---------------------------
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    data = request.get_json(force=True)
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if len(username) < 3:
+        return jsonify({'ok': False, 'error': 'Логин должен быть от 3 символов'}), 400
+    if len(password) < 6:
+        return jsonify({'ok': False, 'error': 'Пароль должен быть от 6 символов'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'ok': False, 'error': 'Пользователь с таким логином уже существует'}), 400
+    user = User(username=username, password_hash=hash_password(password))
+    db.session.add(user)
+    db.session.commit()
+    session['user_id'] = user.id
+    return jsonify({'ok': True})
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json(force=True)
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password(password, user.password_hash):
+        return jsonify({'ok': False, 'error': 'Неверный логин или пароль'}), 400
+    session['user_id'] = user.id
+    return jsonify({'ok': True})
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.clear()
+    return jsonify({'ok': True})
+
+@app.route('/api/me', methods=['GET'])
+@login_required_json
+def api_me():
+    user = current_user()
+    return jsonify({
+        'ok': True,
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'balance_cents': user.balance_cents,
+            'balance_display': cents_to_rub_display(user.balance_cents),
+        }
+    })
+
+@app.route('/api/transactions', methods=['GET'])
+@login_required_json
+def api_transactions():
+    user = current_user()
+    ttype = request.args.get('type', 'all')
+    q = Transaction.query
+    if ttype == 'in':
+        q = q.filter(Transaction.receiver_id == user.id)
+    elif ttype == 'out':
+        q = q.filter(Transaction.sender_id == user.id)
+    else:
+        q = q.filter((Transaction.sender_id == user.id) | (Transaction.receiver_id == user.id))
+    q = q.order_by(Transaction.created_at.desc(), Transaction.id.desc()).limit(100)
+    rows = []
+    for tx in q.all():
+        direction = 'out' if tx.sender_id == user.id else 'in'
+        counterparty_id = tx.receiver_id if direction == 'out' else tx.sender_id
+        counterparty_name = None
+        if counterparty_id:
+            cp = User.query.get(counterparty_id)
+            counterparty_name = cp.username if cp else 'Пользователь'
+        else:
+            counterparty_name = 'Система'
+        rows.append({
+            'id': tx.id,
+            'direction': direction,
+            'amount_cents': tx.amount_cents,
+            'amount_display': cents_to_rub_display(tx.amount_cents),
+            'description': tx.description,
+            'created_at': tx.created_at.isoformat(),
+            'counterparty': counterparty_name
+        })
+    return jsonify({'ok': True, 'transactions': rows})
+
+@app.route('/api/qr/create', methods=['POST'])
+@login_required_json
+def api_qr_create():
+    user = current_user()
+    data = request.get_json(force=True)
+    amount_str = (data.get('amount') or '').strip()
+    description = (data.get('description') or '').strip()
+    cents = parse_amount_to_cents(amount_str)
+    if cents <= 0:
+        return jsonify({'ok': False, 'error': 'Некорректная сумма'}), 400
+    if len(description) > 200:
+        return jsonify({'ok': False, 'error': 'Описание слишком длинное'}), 400
+    paylink = generate_paylink(user.id, cents, description)
+    qr_b64 = generate_qr_png_base64(paylink)
+    return jsonify({'ok': True, 'paylink': paylink, 'qr_png_base64': qr_b64})
+
+@app.route('/api/pay/preview', methods=['POST'])
+@login_required_json
+def api_pay_preview():
+    user = current_user()
+    data = request.get_json(force=True)
+    paylink = data.get('paylink') or ''
+    parsed, err = parse_paylink(paylink)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    rid = parsed['recipient_id']
+    amount_cents = parsed['amount_cents']
+    desc = parsed['description']
+    receiver = User.query.get(rid)
+    if not receiver:
+        return jsonify({'ok': False, 'error': 'Получатель не найден'}), 400
+    if receiver.id == user.id:
+        return jsonify({'ok': False, 'error': 'Нельзя оплатить счёт самому себе'}), 400
+    return jsonify({
+        'ok': True,
+        'invoice': {
+            'recipient_id': receiver.id,
+            'recipient_username': receiver.username,
+            'amount_cents': amount_cents,
+            'amount_display': cents_to_rub_display(amount_cents),
+            'description': desc
+        }
+    })
+
+@app.route('/api/pay', methods=['POST'])
+@login_required_json
+def api_pay():
+    user = current_user()
+    data = request.get_json(force=True)
+    paylink = data.get('paylink') or ''
+    parsed, err = parse_paylink(paylink)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+
+    rid = parsed['recipient_id']
+    amount_cents = parsed['amount_cents']
+    desc = parsed['description']
+    receiver = User.query.get(rid)
+    if not receiver:
+        return jsonify({'ok': False, 'error': 'Получатель не найден'}), 400
+    if receiver.id == user.id:
+        return jsonify({'ok': False, 'error': 'Нельзя оплатить счёт самому себе'}), 400
+    if amount_cents <= 0:
+        return jsonify({'ok': False, 'error': 'Некорректная сумма'}), 400
+    payer = user
+    if payer.balance_cents < amount_cents:
+        return jsonify({'ok': False, 'error': 'Недостаточно средств'}), 400
+
+    payer.balance_cents -= amount_cents
+    receiver.balance_cents += amount_cents
+    tx = Transaction(
+        sender_id=payer.id,
+        receiver_id=receiver.id,
+        amount_cents=amount_cents,
+        description=desc
+    )
+    db.session.add(tx)
+    db.session.commit()
+
+    return jsonify({
+        'ok': True,
+        'balance_cents': payer.balance_cents,
+        'balance_display': cents_to_rub_display(payer.balance_cents),
+        'transaction': {
+            'id': tx.id,
+            'direction': 'out',
+            'amount_cents': tx.amount_cents,
+            'amount_display': cents_to_rub_display(tx.amount_cents),
+            'description': tx.description,
+            'created_at': tx.created_at.isoformat(),
+            'counterparty': receiver.username
+        }
+    })
+
+# ---------------------------
+# Точка входа
+# ---------------------------
+if __name__ == '__main__':
+    init_db()
+    app.run(host='127.0.0.1', port=5000, debug=True)
