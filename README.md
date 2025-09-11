@@ -1,5 +1,10 @@
 # LiBank
 
+<p align="center">
+    <img src="static/favicon.ico" alt="Логотип" width="200">
+</p>
+
+
 ---
 
 ## Как открыть терминал в VSCode (WSL)
