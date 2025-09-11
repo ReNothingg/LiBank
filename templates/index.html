@@ -1,25 +1,104 @@
-{% extends "base.html" %}
-{% set page = "login" %}
-{% block content %}
-<div class="screen">
-    <div class="brand">Мой Банк</div>
-    <div class="card">
-        <h1 class="title">Вход</h1>
-        <form id="loginForm" class="form">
-            <label class="field">
-                <span>Логин</span>
-                <input type="text" name="username" placeholder="your_name" required />
-            </label>
-            <label class="field">
-                <span>Пароль</span>
-                <input type="password" name="password" placeholder="••••••••" required />
-            </label>
-            <button type="submit" class="btn primary">Войти</button>
-        </form>
-        <div class="muted mt-12">
-            Нет аккаунта?
-            <a href="/register" class="link">Зарегистрироваться</a>
+<!doctype html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8">
+    <title>Mobile Bank — Вход</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body data-page="login">
+    <div class="app-gradient"></div>
+
+    <div class="safe-area">
+        <div class="login-container card ios-card animate-rise">
+            <h1 class="app-title">Bank</h1>
+            <p class="subtitle">Вход в аккаунт</p>
+
+            <form id="loginForm" class="form">
+                <div class="input-group">
+                    <label>Имя пользователя</label>
+                    <input type="text" name="username" autocomplete="username" placeholder="username" required>
+                </div>
+                <div class="input-group">
+                    <label>Пароль</label>
+                    <input type="password" name="password" autocomplete="current-password" placeholder="••••••••"
+                        required>
+                </div>
+
+                <button class="btn btn-primary btn-large" type="submit">Войти</button>
+
+                <div class="divider"></div>
+
+                <button id="registerBtn" class="btn btn-ghost" type="button">Создать аккаунт</button>
+
+                <div class="test-login">
+                    <details>
+                        <summary>Тест: вход по ID</summary>
+                        <div class="input-inline">
+                            <input type="number" id="loginByIdInput" placeholder="ID пользователя">
+                            <button id="loginByIdBtn" class="btn btn-secondary" type="button">Войти по ID</button>
+                        </div>
+                        <small>Для демонстрации и тестов</small>
+                    </details>
+                </div>
+            </form>
         </div>
     </div>
-</div>
-{% endblock %}
+
+    <!-- Modal: Register -->
+    <div id="registerModal" class="modal">
+        <div class="modal-sheet">
+            <div class="modal-header">
+                <h3>Регистрация</h3>
+                <button class="btn-icon" data-close="registerModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="registerForm" class="form">
+                    <div class="input-group">
+                        <label>Имя</label>
+                        <input type="text" name="first_name" placeholder="Иван" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Фамилия</label>
+                        <input type="text" name="last_name" placeholder="Иванов" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Отчество (необязательно)</label>
+                        <input type="text" name="patronymic" placeholder="Иванович">
+                    </div>
+                    <div class="input-group">
+                        <label>Дата рождения</label>
+                        <input type="date" name="birth_date" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Юзернейм</label>
+                        <input type="text" name="username" placeholder="ivanov_i" autocomplete="username" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Пароль</label>
+                        <input type="password" name="password" placeholder="••••••••" autocomplete="new-password"
+                            required>
+                        <!-- NEW: Password requirements hint -->
+                        <small class="hint" style="text-align: left; padding: 4px 0; font-size: 12px;">
+                            Мин. 8 символов, 1 заглавная, 1 строчная, 1 цифра.
+                        </small>
+                    </div>
+                    <div class="input-group">
+                        <label>Подтверждение пароля</label>
+                        <input type="password" name="password_confirm" placeholder="••••••••"
+                            autocomplete="new-password" required>
+                    </div>
+                    <button class="btn btn-primary btn-large" type="submit">Зарегистрироваться</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

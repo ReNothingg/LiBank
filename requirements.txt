@@ -1,5 +1,8 @@
-Flask==3.0.3
-Flask-SQLAlchemy==3.1.1
-Werkzeug==3.0.3
-qrcode==7.4.2
-Pillow==10.4.0
+Flask
+Flask-SQLAlchemy
+Flask-Admin
+python-dotenv
+alembic
+qrcode
+Pillow
+werkzeug

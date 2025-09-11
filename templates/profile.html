@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+    <meta charset="utf-8">
+    <title>Mobile Bank — Профиль</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body data-page="profile">
+    <div class="app-gradient"></div>
+    <div class="safe-area">
+
+        <header class="topbar">
+            <a href="/account" class="btn-icon">‹</a>
+            <div class="brand">Профиль</div>
+            <div class="topbar-actions" style="width: 36px;"></div> <!-- Spacer -->
+        </header>
+
+        <main class="content">
+            <section class="card ios-card animate-rise">
+                <h3>Личные данные</h3>
+                <form id="profileForm" class="form">
+                    <div class="input-group">
+                        <label>Имя</label>
+                        <input type="text" name="first_name" placeholder="Иван" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Фамилия</label>
+                        <input type="text" name="last_name" placeholder="Иванов" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Отчество (необязательно)</label>
+                        <input type="text" name="patronymic" placeholder="Иванович">
+                    </div>
+                    <div class="input-group">
+                        <label>Дата рождения</label>
+                        <input type="date" name="birth_date" required>
+                    </div>
+                    <button class="btn btn-primary btn-large" type="submit">Сохранить</button>
+                </form>
+            </section>
+
+            <section class="card ios-card animate-rise" style="margin-top: 16px;">
+                <h3>Смена пароля</h3>
+                <form id="passwordForm" class="form">
+                    <div class="input-group">
+                        <label>Текущий пароль</label>
+                        <input type="password" name="current_password" placeholder="••••••••"
+                            autocomplete="current-password" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Новый пароль</label>
+                        <input type="password" name="new_password" placeholder="••••••••" autocomplete="new-password"
+                            required>
+                    </div>
+                    <div class="input-group">
+                        <label>Подтверждение нового пароля</label>
+                        <input type="password" name="new_password_confirm" placeholder="••••••••"
+                            autocomplete="new-password" required>
+                    </div>
+                    <button class="btn btn-secondary btn-large" type="submit">Сменить пароль</button>
+                </form>
+            </section>
+        </main>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>
