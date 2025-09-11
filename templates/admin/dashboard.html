@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+</head>
+
+<body>
+    <div class="app-gradient"></div>
+    <div class="safe-area">
+        <div class="content">
+            <div class="topbar">
+                <div class="logo">
+                    <div class="brand">Admin Panel <small class="text-muted">администратор</small></div>
+                </div>
+                <div class="topbar-actions">
+                    <div class="subtitle">Logged in as: {{ session.admin_username }}</div>
+                    <a class="btn btn-secondary" href="{{ url_for('admin.admin_logout') }}">Logout</a>
+                </div>
+            </div>
+
+            <div class="card ios-card animate-rise">
+                <h2>Users</h2>
+                <div class="divider"></div>
+                <div class="table-responsive">
+                    <table style="width:100%;border-collapse:collapse">
+                        <thead>
+                            <tr style="text-align:left;">
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Name</th>
+                                <th>Balance</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                            <tr>
+                                <td>{{ u.id }}</td>
+                                <td>{{ u.username }}</td>
+                                <td>{{ u.last_name }} {{ u.first_name }}</td>
+                                <td>{{ '%.2f' % (u.balance_cents / 100.0) }}</td>
+                                <td>
+                                    <div class="actions-cell">
+                                        <a class="btn btn-ghost"
+                                            href="{{ url_for('admin.admin_user_edit', user_id=u.id) }}">Edit</a>
+                                        <a class="btn btn-ghost"
+                                            href="{{ url_for('admin.admin_user_transactions', user_id=u.id) }}">Transactions</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

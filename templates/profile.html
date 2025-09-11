@@ -3,9 +3,10 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Mobile Bank — Профиль</title>
+    <title>LiBank — Профиль</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
 
 <body data-page="profile">
@@ -13,9 +14,13 @@
     <div class="safe-area">
 
         <header class="topbar">
-            <a href="/account" class="btn-icon">‹</a>
-            <div class="brand">Профиль</div>
-            <div class="topbar-actions" style="width: 36px;"></div> <!-- Spacer -->
+            <button class="btn-icon" aria-label="Назад" title="Назад" onclick="location.href='/account'">←</button>
+
+            <div class="logo">
+                <div class="brand">Профиль</div>
+            </div>
+
+            <div class="topbar-actions" style="width: 36px;"></div>
         </header>
 
         <main class="content">

@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+    <style>
+        body {
+            min-height: 100vh
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-gradient"></div>
+    <div class="safe-area">
+        <div class="login-container">
+            <div class="card ios-card animate-rise">
+                <h1 class="app-title">Admin Panel</h1>
+                <p class="subtitle">Введите username и три админ-пароля</p>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="toast-container">
+                    {% for cat, msg in messages %}
+                    <div class="toast {{ 'success' if cat=='success' else 'error' }}">{{ msg }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <form method="post" class="form">
+                    <div class="input-group">
+                        <label>Username</label>
+                        <input name="username" type="text" autocomplete="username">
+                    </div>
+                    <div class="input-group">
+                        <label>Пароль 1</label>
+                        <input name="pass1" type="password" autocomplete="current-password">
+                    </div>
+                    <div class="input-group">
+                        <label>Пароль 2</label>
+                        <input name="pass2" type="password">
+                    </div>
+                    <div class="input-group">
+                        <label>Пароль 3</label>
+                        <input name="pass3" type="password">
+                    </div>
+                    <div class="divider"></div>
+                    <button class="btn btn-primary btn-large" type="submit">Войти</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

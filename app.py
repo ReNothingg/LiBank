@@ -1,7 +1,7 @@
 import os
 import sqlite3
-import re  # Для валидации пароля
-import csv  # Для экспорта в CSV
+import re
+import csv
 from flask import (
     Flask, request, session, jsonify,
     render_template, send_file, Blueprint, g, redirect, url_for, abort, Response
@@ -18,10 +18,11 @@ from decimal import Decimal, InvalidOperation
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_change_me')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['DEBUG_LOGIN_BY_ID'] = True  # для тестового входа по ID
+app.config['DEBUG_LOGIN_BY_ID'] = True
 DB_PATH = os.path.join(os.path.dirname(__file__), 'bank.sqlite3')
 
-# Blueprints для масштабирования
+app.config['DB_PATH'] = DB_PATH
+
 api = Blueprint('api', __name__, url_prefix='/api')
 web = Blueprint('web', __name__)
 
@@ -130,7 +131,6 @@ def get_user_by_username(username):
     db = get_db()
     return db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
 
-# NEW: Password validation helper
 def is_password_strong(password):
     if len(password) < 8: return False, "Пароль должен быть не менее 8 символов"
     if not re.search(r"[A-Z]", password): return False, "Пароль должен содержать хотя бы одну заглавную букву"
@@ -146,7 +146,7 @@ def serialize_user(row, full=False):
         "full_name": full_name or row["username"],
         "balance_cents": row["balance_cents"],
     }
-    if full: # Add more details for profile page
+    if full:
         data.update({
             "first_name": row["first_name"],
             "last_name": row["last_name"],
@@ -165,7 +165,7 @@ def serialize_transaction(row, full=False):
         "counterparty_username": row["counterparty_username"],
         "created_at": row["created_at"]
     }
-    if full: # Add extra details for detail view
+    if full:
         data.update({
             "invoice_id": row["invoice_id"],
             "user_id": row["user_id"],
@@ -235,7 +235,6 @@ def account():
         return redirect(url_for('web.index'))
     return render_template('account.html')
 
-# NEW: Profile page route
 @web.route('/profile')
 def profile():
     if not session.get('user_id'):
@@ -264,7 +263,6 @@ def api_register():
     if password != password_confirm:
         return jsonify(ok=False, error="Пароли не совпадают"), 400
 
-    # NEW: Strong password check
     is_strong, message = is_password_strong(password)
     if not is_strong:
         return jsonify(ok=False, error=message), 400
@@ -328,9 +326,8 @@ def api_logout():
 def api_me():
     uid = require_login()
     user = get_user_by_id(uid)
-    return jsonify(ok=True, user=serialize_user(user, full=True)) # Use full serialization
+    return jsonify(ok=True, user=serialize_user(user, full=True))
 
-# NEW: Update profile endpoint
 @api.route('/me', methods=['PUT'])
 def api_update_me():
     uid = require_login()
@@ -355,7 +352,6 @@ def api_update_me():
     db.commit()
     return jsonify(ok=True, message="Профиль обновлён")
 
-# NEW: Change password endpoint
 @api.route('/me/password', methods=['PUT'])
 def api_change_password():
     uid = require_login()
@@ -414,7 +410,6 @@ def api_transactions():
     rows = db.execute(sql, params).fetchall()
     return jsonify(ok=True, items=[serialize_transaction(r) for r in rows])
 
-# NEW: Get single transaction details
 @api.route('/transactions/<int:tx_id>', methods=['GET'])
 def api_transaction_details(tx_id):
     uid = require_login()
@@ -429,7 +424,6 @@ def api_transaction_details(tx_id):
         return jsonify(ok=False, error="Транзакция не найдена"), 404
     return jsonify(ok=True, transaction=serialize_transaction(row, full=True))
 
-# NEW: Export transactions to CSV
 @api.route('/transactions/export', methods=['GET'])
 def api_export_transactions():
     uid = require_login()
@@ -554,6 +548,12 @@ def qr_png(invoice_id):
 
 app.register_blueprint(api)
 
+try:
+    from admin_panel import admin_bp
+    app.register_blueprint(admin_bp)
+except Exception:
+    pass
+
 # -------------------------
 # Error handlers
 # -------------------------
@@ -575,9 +575,6 @@ def err_400(e):
 # Run
 # -------------------------
 if __name__ == '__main__':
-    # Создаем базу данных и таблицы, если их нет, перед первым запросом
     with app.app_context():
-        # Важно: Alembic теперь управляет схемой. Эту строку можно убрать после первой миграции.
-        # db.create_all()
         pass
     app.run(debug=True)

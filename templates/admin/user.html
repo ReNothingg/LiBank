@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Edit User</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+</head>
+
+<body>
+    <div class="app-gradient"></div>
+    <div class="safe-area">
+        <div class="content">
+            <div class="topbar">
+                <div class="brand">Edit User #{{ user.id }}</div>
+                <div class="topbar-actions">
+                    <a class="btn btn-ghost" href="{{ url_for('admin.admin_index') }}">Back</a>
+                </div>
+            </div>
+
+            <div class="card ios-card animate-rise">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="toast-container">
+                    {% for cat, msg in messages %}
+                    <div class="toast {{ 'success' if cat=='success' else 'error' }}">{{ msg }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <form method="post">
+                    <div class="input-group">
+                        <label>Username</label>
+                        <input name="username" value="{{ user.username }}">
+                    </div>
+                    <div class="input-group">
+                        <label>First name</label>
+                        <input name="first_name" value="{{ user.first_name }}">
+                    </div>
+                    <div class="input-group">
+                        <label>Last name</label>
+                        <input name="last_name" value="{{ user.last_name }}">
+                    </div>
+                    <div class="input-group">
+                        <label>Patronymic</label>
+                        <input name="patronymic" value="{{ user.patronymic }}">
+                    </div>
+                    <div class="input-group">
+                        <label>Birth date</label>
+                        <input name="birth_date" type="date" value="{{ user.birth_date }}">
+                    </div>
+                    <div class="input-group">
+                        <label>Balance (e.g. 123.45)</label>
+                        <input name="balance" value="{{ '%.2f' % (user.balance_cents / 100.0) }}">
+                    </div>
+                    <div class="input-group">
+                        <label>New password</label>
+                        <input name="new_password" type="password">
+                    </div>
+                    <div class="divider"></div>
+                    <button class="btn btn-primary" type="submit">Save</button>
+                    <a class="btn btn-ghost" href="{{ url_for('admin.admin_user_transactions', user_id=user.id) }}">View
+                        transactions</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

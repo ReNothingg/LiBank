@@ -22,3 +22,12 @@ python3 app.py
 
 **Затем перейти по ссылке:**
 * `http://localhost:5000/`
+* `http://localhost:5000/admin`
+
+**Создайте файл .env**
+```env
+ADMIN_PASS1='secret1'
+ADMIN_PASS2='secret2'
+ADMIN_PASS3='secret3'
+SECRET_KEY='change_this_secret'
+```

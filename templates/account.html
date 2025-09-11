@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Mobile Bank — Аккаунт</title>
+    <title>LiBank — Аккаунт</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="stylesheet" href="/static/css/style.css">
-    <!-- jsQR fallback для широких браузеров (если нет BarcodeDetector) -->
     <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
 
 <body data-page="account">
@@ -15,11 +15,11 @@
     <div class="safe-area">
 
         <header class="topbar">
-            <div class="brand">Bank</div>
+            <div class="brand">LiBank</div>
             <div class="topbar-actions">
-                <!-- NEW: Profile button -->
-                <button class="btn-icon" aria-label="Профиль" onclick="location.href='/profile'"> ⚙️ </button>
-                <button id="logoutBtn" class="btn-icon" aria-label="Выход"> 🤕 </button>
+                <button class="btn-icon" aria-label="Профиль" title="Профиль"
+                    onclick="location.href='/profile'">⚙️</button>
+                <button id="logoutBtn" class="btn-icon" aria-label="Выход" title="Выйти">⎋</button>
             </div>
         </header>
 
@@ -31,11 +31,30 @@
                 <div id="usernameLabel" class="balance-sub">—</div>
             </section>
 
-            <section class="actions">
-                <button id="transferBtn" class="btn btn-primary btn-large">Перевести</button>
-                <button id="scanBtn" class="btn btn-secondary btn-large">Сканировать QR</button>
-                <button id="createInvoiceBtn" class="btn btn-secondary btn-large">Создать QR</button>
+            <section class="actions actions-icons" aria-label="Действия">
+                <div class="action-tile">
+                    <button id="transferBtn" class="btn-icon action-btn" aria-label="Перевести">
+                        <img src="/static/icons/transfer.svg" width="22" height="22" alt="" aria-hidden="true" />
+                    </button>
+                    <div class="action-label">Перевести</div>
+                </div>
+
+                <div class="action-tile">
+                    <button id="scanBtn" class="btn-icon action-btn" aria-label="Сканировать QR">
+                        <img src="/static/icons/scan.svg" width="22" height="22" alt="" aria-hidden="true" />
+                    </button>
+                    <div class="action-label">Сканировать QR</div>
+                </div>
+
+                <div class="action-tile">
+                    <button id="createInvoiceBtn" class="btn-icon action-btn" aria-label="Создать QR">
+                        <img src="/static/icons/invoice.svg" width="22" height="22" alt="" aria-hidden="true" />
+                    </button>
+                    <div class="action-label">Создать QR</div>
+                </div>
             </section>
+
+            <hr>
 
             <section class="filters">
                 <div class="chips">
@@ -43,12 +62,15 @@
                     <button class="chip" data-filter="credit">Поступления</button>
                     <button class="chip" data-filter="debit">Списания</button>
                 </div>
-                <div class="input-inline">
+                <div class="input-inline search-inline">
                     <input id="searchInput" type="search" placeholder="Поиск по описанию или контрагенту">
-                    <!-- NEW: Export button -->
-                    <button id="exportBtn" class="btn-icon" type="button" title="Экспорт в CSV">⇩</button>
+                    <!-- <button id="exportBtn" class="btn-icon export-btn" type="button" title="Экспорт в CSV"
+                        aria-label="Экспорт">
+                        <img src="/static/icons/export.svg" width="18" height="18" alt="" aria-hidden="true" />
+                    </button> -->
                 </div>
             </section>
+
 
             <section class="history card ios-card animate-rise">
                 <h3>История операций</h3>
@@ -152,6 +174,23 @@
             <div class="modal-body">
                 <div id="txDetailContent" class="form">
                     <!-- Content will be injected by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirm (custom, replaces window.confirm) -->
+    <div id="confirmModal" class="modal" aria-hidden="true">
+        <div class="modal-sheet">
+            <div class="modal-header">
+                <h3>Подтверждение</h3>
+                <button class="btn-icon" data-close="confirmModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="confirm-message"> </p>
+                <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+                    <button data-confirm="no" class="btn btn-ghost" type="button">Отменить</button>
+                    <button data-confirm="yes" class="btn btn-primary" type="button">Подтвердить</button>
                 </div>
             </div>
         </div>

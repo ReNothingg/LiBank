@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>User Transactions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+</head>
+
+<body>
+    <div class="app-gradient"></div>
+    <div class="safe-area">
+        <div class="content">
+            <div class="topbar">
+                <div class="brand">Transactions — {{ user.username }}</div>
+                <div class="topbar-actions">
+                    <a class="btn btn-ghost" href="{{ url_for('admin.admin_user_edit', user_id=user.id) }}">Back</a>
+                </div>
+            </div>
+
+            <div class="card ios-card animate-rise">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="toast-container">
+                    {% for cat, msg in messages %}
+                    <div class="toast {{ 'success' if cat=='success' else 'error' }}">{{ msg }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <h3>Create transaction</h3>
+                <form method="post" style="margin-bottom:12px">
+                    <div class="input-inline">
+                        <select name="type" class="">
+                            <option value="credit">Credit</option>
+                            <option value="debit">Debit</option>
+                        </select>
+                        <input name="amount" placeholder="12.34">
+                        <input name="description" placeholder="Description">
+                        <button class="btn btn-primary" type="submit">Create</button>
+                    </div>
+                </form>
+
+                <h3>Existing transactions</h3>
+                <div class="history">
+                    <ul class="tx-list">
+                        {% for t in transactions %}
+                        <li class="tx-item">
+                            <div class="tx-left">
+                                <div class="tx-title">#{{ t.id }} — {{ t.type }}</div>
+                                <div class="tx-sub">{{ t.description }}</div>
+                            </div>
+                            <div>
+                                <div class="amount {{ 'positive' if t.type=='credit' else 'negative' }}">{{ '%.2f' %
+                                    (t.amount_cents/100.0) }}</div>
+                                <form method="post"
+                                    action="{{ url_for('admin.admin_delete_transaction', user_id=user.id, tx_id=t.id) }}"
+                                    style="display:inline">
+                                    <button class="btn btn-ghost" type="submit">Delete</button>
+                                </form>
+                            </div>
+                        </li>
+                        {% else %}
+                        <li class="empty-state">No transactions</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

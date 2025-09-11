@@ -3,9 +3,11 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Mobile Bank — Вход</title>
+    <title>LiBank — Вход</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
 </head>
 
 <body data-page="login">
@@ -13,8 +15,14 @@
 
     <div class="safe-area">
         <div class="login-container card ios-card animate-rise">
-            <h1 class="app-title">Bank</h1>
-            <p class="subtitle">Вход в аккаунт</p>
+            <div class="logo" aria-hidden="true">
+                <div>
+                    <h1 class="app-title">LiBank</h1>
+                    <div class="brand"><small>Вход в аккаунт</small></div>
+                </div>
+            </div>
+
+            <hr>
 
             <form id="loginForm" class="form">
                 <div class="input-group">
@@ -29,11 +37,15 @@
 
                 <button class="btn btn-primary btn-large" type="submit">Войти</button>
 
-                <div class="divider"></div>
+                <div class="divider">
+                    <div class="brand"><small>Нет аккаунта?</small></div>
+                </div>
+
+                <hr>
 
                 <button id="registerBtn" class="btn btn-ghost" type="button">Создать аккаунт</button>
 
-                <div class="test-login">
+                <!-- <div class="test-login">
                     <details>
                         <summary>Тест: вход по ID</summary>
                         <div class="input-inline">
@@ -42,12 +54,11 @@
                         </div>
                         <small>Для демонстрации и тестов</small>
                     </details>
-                </div>
+                </div> -->
             </form>
         </div>
     </div>
 
-    <!-- Modal: Register -->
     <div id="registerModal" class="modal">
         <div class="modal-sheet">
             <div class="modal-header">
@@ -80,7 +91,6 @@
                         <label>Пароль</label>
                         <input type="password" name="password" placeholder="••••••••" autocomplete="new-password"
                             required>
-                        <!-- NEW: Password requirements hint -->
                         <small class="hint" style="text-align: left; padding: 4px 0; font-size: 12px;">
                             Мин. 8 символов, 1 заглавная, 1 строчная, 1 цифра.
                         </small>

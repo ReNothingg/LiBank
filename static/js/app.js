@@ -1,4 +1,3 @@
-// Общие утилиты
 function toast(message, type = '') {
     const cont = document.getElementById('toastContainer');
     if (!cont) return;
@@ -127,7 +126,6 @@ async function initProfilePage() {
     const profileForm = document.getElementById('profileForm');
     const passwordForm = document.getElementById('passwordForm');
 
-    // Load and populate user data
     try {
         const { user } = await api('/api/me');
         profileForm.elements.first_name.value = user.first_name;
@@ -136,10 +134,9 @@ async function initProfilePage() {
         profileForm.elements.birth_date.value = user.birth_date;
     } catch (err) {
         toast(err.message, 'error');
-        window.location.href = '/'; // Redirect if fails
+        window.location.href = '/';
     }
 
-    // Handle profile update
     profileForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(profileForm);
@@ -152,7 +149,6 @@ async function initProfilePage() {
         }
     });
 
-    // Handle password change
     passwordForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(passwordForm);
@@ -210,7 +206,7 @@ async function loadTransactions() {
     for (const t of data.items) {
         const li = document.createElement('li');
         li.className = 'tx-item';
-        li.dataset.txId = t.id; // Set data attribute for details
+        li.dataset.txId = t.id;
         li.style.cursor = 'pointer';
 
         const left = document.createElement('div');
@@ -232,7 +228,6 @@ async function loadTransactions() {
         list.appendChild(li);
     }
 
-    // Add click listeners after render
     document.querySelectorAll('.tx-item').forEach(item => {
         item.addEventListener('click', () => showTransactionDetails(item.dataset.txId));
     });
@@ -359,7 +354,7 @@ function handleDecoded(text) {
     const id = parseInvoiceId(text);
     if (!id) {
         toast('Не удалось распознать счёт', 'error');
-        setTimeout(startScanner, 1000); // Try again
+        setTimeout(startScanner, 1000);
         return;
     }
     showInvoiceConfirm(id);
@@ -367,7 +362,6 @@ function handleDecoded(text) {
 
 // ---- Invoice & Transfer Forms ----
 function bindForms() {
-    // Invoice form
     const invoiceForm = document.getElementById('invoiceForm');
     invoiceForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -395,7 +389,6 @@ function bindForms() {
         }
     });
 
-    // Transfer form
     const transferForm = document.getElementById('transferForm');
     transferForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -430,25 +423,6 @@ async function initAccountPage() {
     bindFilters();
     bindForms();
 
-    document.getElementById('exportBtn').addEventListener('click', async () => {
-        try {
-            const blob = await api('/api/transactions/export');
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-            toast('Экспорт начался', 'success');
-        } catch (err) {
-            toast('Ошибка экспорта: ' + err.message, 'error');
-        }
-    });
-
-    // Modals setup
     document.getElementById('scanBtn').addEventListener('click', () => { openModal('scanModal'); startScanner(); });
     document.getElementById('createInvoiceBtn').addEventListener('click', () => {
         document.getElementById('invoiceForm').reset();
@@ -466,7 +440,6 @@ async function initAccountPage() {
         showInvoiceConfirm(id);
     });
 
-    // Universal modal closer
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal') || e.target.closest('[data-close]')) {
@@ -477,7 +450,6 @@ async function initAccountPage() {
     });
 }
 
-// Bootstrap
 document.addEventListener('DOMContentLoaded', () => {
     const page = document.body.dataset.page;
     if (page === 'login') initLoginPage();
